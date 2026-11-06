@@ -9,10 +9,11 @@ import { useDispatch } from "react-redux";
 import WordsNavigation from "./WordsNavigation";
 import LearningNavigation from "./LearningNavigation";
 import Settings from "../screens/Settings";
-import { StatusBar } from "react-native";
+import { StatusBar, Text } from "react-native";
 import { wordsLearningActions } from "../store/wordsLearningSlice";
 import { themeActions } from "../store/themeSlice";
 import { REFRESH_STATUSES_SPAN } from "../constants";
+import { init, getWords, getTheme } from "../store/dbUtils";
 
 const Tab = createBottomTabNavigator();
 
@@ -21,14 +22,40 @@ function MainNavigator() {
   const isDark = useSelector((state) => state.theme.isDark);
 
   const dispatch = useDispatch();
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    async function restore() {
+      try {
+        await init();
+        const [words, darkTheme] = await Promise.all([getWords(), getTheme()]);
+        if (!active) return;
+        dispatch(wordsLearningActions.setInitial(words || []));
+        dispatch(themeActions.setInitial(darkTheme ?? true));
+        setLoaded(true);
+      } catch {
+        if (active) setLoadError(true);
+      }
+    }
+    restore();
+    return () => {
+      active = false;
+    };
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!loaded) return;
     const interval = setInterval(
       () => dispatch(wordsLearningActions.updateStatuses()),
       REFRESH_STATUSES_SPAN
     );
     return () => clearInterval(interval);
-  }, []);
+  }, [dispatch, loaded]);
+
+  if (loadError) return <Text>Unable to load saved data</Text>;
+  if (!loaded) return null;
 
   return (
     <>
